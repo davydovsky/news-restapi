@@ -19,6 +19,9 @@ class RepositoryException(Exception):
 
 
 class Repository:
+    """
+    A Base repository class for storing objects in a database table
+    """
     def __init__(self, table_name: str, columns: Tuple[str, ...], connection=None):
         self.table_name = table_name
         self.columns = columns
@@ -56,6 +59,11 @@ class Repository:
                     raise RepositoryException(*e.args)
 
     def add(self, obj: Any) -> Any:
+        """
+        Inserts a given object to a table
+        :param obj: object to store
+        :return: same object with id
+        """
         try:
             cursor = self.conn.cursor()
             data = self.obj_to_data(obj)
@@ -69,6 +77,12 @@ class Repository:
             raise RepositoryException('Error storing object: {}'.format(e), e)
 
     def list(self, limit: int, offset: int) -> List:
+        """
+        Fetches a given amount of objects from a table
+        :param limit:
+        :param offset:
+        :return: a list of objects
+        """
         try:
             cursor = self.conn.cursor()
             query = 'SELECT {} FROM {} ORDER BY id DESC LIMIT {} OFFSET {}'.format(
@@ -80,6 +94,11 @@ class Repository:
             raise RepositoryException('Error fetching objects: {}'.format(e), e)
 
     def get(self, id: int) -> Any:
+        """
+        Fetches an object from a table with given id
+        :param id:
+        :return: object
+        """
         try:
             cursor = self.conn.cursor()
             query = 'SELECT {} FROM {} WHERE id = ? LIMIT 1'.format(
@@ -92,6 +111,11 @@ class Repository:
             raise RepositoryException('Error fetching object: {}'.format(e), e)
 
     def update(self, obj: Any) -> Any:
+        """
+        Updates a given object in a table
+        :param obj:
+        :return: object
+        """
         try:
             cursor = self.conn.cursor()
             data = self.obj_to_data(obj) + (obj.id,)
@@ -102,6 +126,11 @@ class Repository:
             raise RepositoryException('Error updating object: {}'.format(e), e)
 
     def delete(self, obj: Any) -> None:
+        """
+        Deletes a given object from a table
+        :param obj:
+        :return:
+        """
         try:
             cursor = self.conn.cursor()
             cursor.execute('DELETE FROM {} WHERE id = ?'.format(self.table_name), (obj.id,))
@@ -196,13 +225,20 @@ class CommentRepository(Repository):
     def get_comment(self, id: int) -> Comment:
         return self.get(id)
 
-    def get_comments_for_news(self, news: News, limit: int, offset: int) -> List:
+    def get_comments_for_news(self, news_id: int, limit: int, offset: int) -> List:
+        """
+        Fetches a list of comments that corresponds to the given news id
+        :param news_id:
+        :param limit:
+        :param offset:
+        :return:
+        """
         try:
             cursor = self.conn.cursor()
             query = 'SELECT {} FROM {} WHERE news_id = ? ORDER BY id DESC LIMIT {} OFFSET {}'.format(
                 'id,{}'.format(self.columns_as_string), self.table_name, limit, offset
             )
-            cursor.execute(query, (news.id,))
+            cursor.execute(query, (news_id,))
             return [self.data_to_obj(data) for data in cursor.fetchall()]
         except Exception as e:
             raise RepositoryException('Error fetching objects: {}'.format(e), e)
@@ -213,4 +249,3 @@ class CommentRepository(Repository):
 
     def delete_comment(self, comment: Comment) -> None:
         return self.delete(comment)
-
