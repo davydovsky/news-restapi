@@ -4,9 +4,11 @@ import copy
 
 from pathlib import Path, PurePath
 from datetime import datetime
-from .utils import timestamp_to_datetime, datetime_to_timestamp
-from .models import News, Comment
-from .repositories import NewsRepository, CommentRepository
+from dataclasses import asdict
+from news_restapi.utils import timestamp_to_datetime, datetime_to_timestamp
+from news_restapi.models import News, Comment
+from news_restapi.repositories import NewsRepository, CommentRepository
+from news_restapi.controllers import NewsController, CommentController
 
 
 class TestCaseUtils(unittest.TestCase):
@@ -100,7 +102,7 @@ class TestCaseCommentRepository(TestCaseBaseRepository):
         self.comment_repository = CommentRepository(connection=self.conn)
 
     def test_list_comment(self):
-        comment_list = self.comment_repository.get_comments_for_news(self.news, 1, 0)
+        comment_list = self.comment_repository.get_comments_for_news(self.news.id, 1, 0)
         self.assertListEqual(comment_list, [self.comment])
 
     def test_get_comment(self):
@@ -128,3 +130,109 @@ class TestCaseCommentRepository(TestCaseBaseRepository):
         self.assertIsNotNone(created_comment.id)
 
 
+class MockHandler:
+    pass
+
+
+class TestCaseNewsController(TestCaseBaseRepository):
+    def setUp(self):
+        super().setUp()
+        dt = datetime(2019, 11, 17, 15, 27, 43, 804000)
+        self.news_repository = NewsRepository(connection=self.conn)
+        news = News(id=None, created_date=dt, modified_date=dt, title='News title', content='News content')
+        news = self.news_repository.add_news(news)
+        self.news_id = news.id
+        self.news_dict = asdict(news)
+        self.news_updated = asdict(News(
+            id=self.news_id, created_date=dt, modified_date=dt,
+            title='News updated title', content='News updated content')
+        )
+        self.news_controller = NewsController(self.news_repository)
+
+        self.palyoad_create = MockHandler()
+        setattr(self.palyoad_create, 'get_payload', lambda: {'title': 'News title', 'content': 'News content'})
+
+        self.palyoad_update = MockHandler()
+        setattr(
+            self.palyoad_update,
+            'get_payload',
+            lambda: {'title': 'News updated title', 'content': 'News updated content'}
+        )
+
+    def test_list_news(self):
+        self.assertEqual(self.news_controller.list_news(self.palyoad_create), [self.news_dict])
+
+    def test_get_news(self):
+        self.assertEqual(self.news_controller.get_news(self.palyoad_create, **{'pk': self.news_id}), self.news_dict)
+
+    def test_update_news(self):
+        result = self.news_controller.update_news(self.palyoad_update, **{'pk': self.news_id})
+        result_check = {'title': result['title'], 'content': result['content']}
+        self.assertEqual(result_check, self.palyoad_update.get_payload())
+
+    def test_delete_news(self):
+        self.news_controller.delete_news(self.palyoad_create, **{'pk': self.news_id})
+        self.assertIsNone(self.news_repository.get_news(self.news_id))
+
+    def test_add_news(self):
+        result = self.news_controller.add_news(self.palyoad_create)
+        result_check = {'title': result['title'], 'content': result['content']}
+        self.assertEqual(result_check, self.palyoad_create.get_payload())
+
+
+class TestCaseCommentController(TestCaseBaseRepository):
+    def setUp(self):
+        super().setUp()
+        dt = datetime(2019, 11, 17, 15, 27, 43, 804000)
+        self.news_repository = NewsRepository(connection=self.conn)
+        self.comment_repository = CommentRepository(connection=self.conn)
+
+        news = News(id=None, created_date=dt, modified_date=dt, title='News title', content='News content')
+        news = self.news_repository.add_news(news)
+        self.news_id = news.id
+
+        comment = Comment(id=None, created_date=dt, modified_date=dt, news_id=self.news_id, content='Comment content')
+        comment = self.comment_repository.add_comment(comment)
+        self.comment_id = comment.id
+
+        self.comment_dict = asdict(comment)
+        self.comment_updated = asdict(Comment(
+            id=self.comment_id, created_date=dt, modified_date=dt, news_id=self.news_id, content='Comment updated content')
+        )
+        self.comment_controller = CommentController(self.comment_repository)
+
+        self.palyoad_create = MockHandler()
+        setattr(self.palyoad_create, 'get_payload', lambda: {'content': 'Comment content'})
+
+        self.palyoad_update = MockHandler()
+        setattr(self.palyoad_update, 'get_payload', lambda: {'content': 'Comment updated content'})
+
+    def test_list_comment(self):
+        self.assertEqual(
+            self.comment_controller.list_comments(self.palyoad_create, **{'news_pk': self.news_id}),
+            [self.comment_dict]
+        )
+
+    def test_get_comment(self):
+        self.assertEqual(
+            self.comment_controller.get_comment(
+                self.palyoad_create, **{'news_pk': self.news_id, 'pk': self.comment_id}
+            ),
+            self.comment_dict
+        )
+
+    def test_update_comment(self):
+        result = self.comment_controller.update_comment(
+            self.palyoad_update, **{'news_pk': self.news_id, 'pk': self.comment_id}
+        )
+        result_check = {'content': result['content']}
+        self.assertEqual(result_check, self.palyoad_update.get_payload())
+
+    def test_delete_comment(self):
+        self.comment_controller.delete_comment(self.palyoad_create, **{'news_pk': self.news_id, 'pk': self.comment_id})
+        self.assertIsNone(self.comment_repository.get_comment(self.comment_id))
+
+    def test_add_comment(self):
+        result = self.comment_controller.add_comment(self.palyoad_create, **{'news_pk': self.news_id})
+        result_check = {'content': result['content']}
+        self.assertEqual(result_check, self.palyoad_create.get_payload())

@@ -3,8 +3,8 @@ from pathlib import Path, PurePath
 from typing import List, Any, Tuple
 from datetime import datetime
 
-from .models import News, Comment
-from .utils import datetime_to_timestamp, timestamp_to_datetime
+from news_restapi.models import News, Comment
+from news_restapi.utils import datetime_to_timestamp, timestamp_to_datetime
 
 
 def get_connection():
